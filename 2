@@ -1,0 +1,251 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define ARTISTA_MAX 100
+#define TITULO_MAX 100
+
+typedef struct Musica {
+    char artista[ARTISTA_MAX];
+    char titulo[TITULO_MAX];
+    struct Musica* proxima;
+} Musica;
+
+typedef struct {
+    Musica* primeira;
+    Musica* atual;
+    int tamanho;
+} Playlist;
+
+void inicializarPlaylist(Playlist* playlist) {
+    playlist->primeira = NULL;
+    playlist->atual = NULL;
+    playlist->tamanho = 0;
+}
+
+Musica* criarMusica(const char* artista, const char* titulo) {
+    Musica* novaMusica = (Musica*)malloc(sizeof(Musica));
+    if (!novaMusica) {
+        fprintf(stderr, "Erro ao alocar memória para nova música.\n");
+        return NULL;
+    }
+    strncpy(novaMusica->artista, artista, ARTISTA_MAX - 1);
+    novaMusica->artista[ARTISTA_MAX - 1] = '\0';
+    strncpy(novaMusica->titulo, titulo, TITULO_MAX - 1);
+    novaMusica->titulo[TITULO_MAX - 1] = '\0';
+    novaMusica->proxima = NULL;
+    return novaMusica;
+}
+
+void adicionarMusica(Playlist* playlist, const char* artista, const char* titulo) {
+    Musica* novaMusica = criarMusica(artista, titulo);
+    if (!novaMusica) return;
+
+    if (!playlist->primeira) {
+        playlist->primeira = novaMusica;
+        novaMusica->proxima = novaMusica;
+    } else {
+        Musica* temp = playlist->primeira;
+        while (temp->proxima != playlist->primeira) {
+            temp = temp->proxima;
+        }
+        temp->proxima = novaMusica;
+        novaMusica->proxima = playlist->primeira;
+    }
+    playlist->tamanho++;
+    playlist->atual = novaMusica;
+}
+
+void removerMusica(Playlist* playlist, const char* titulo) {
+    if (!playlist->primeira) return;
+
+    Musica *temp = playlist->primeira, *anterior = NULL;
+    do {
+        if (strcmp(temp->titulo, titulo) == 0) {
+            if (temp == playlist->primeira) {
+                Musica* tail = playlist->primeira;
+                while (tail->proxima != playlist->primeira) {
+                    tail = tail->proxima;
+                }
+                playlist->primeira = temp->proxima;
+                tail->proxima = playlist->primeira;
+            } else {
+                anterior->proxima = temp->proxima;
+            }
+            if (playlist->atual == temp) {
+                playlist->atual = temp->proxima;
+            }
+            free(temp);
+            playlist->tamanho--;
+            return;
+        }
+        anterior = temp;
+        temp = temp->proxima;
+    } while (temp != playlist->primeira);
+}
+
+Musica* buscarMusica(Playlist* playlist, const char* titulo) {
+    if (!playlist->primeira) return NULL;
+
+    Musica* temp = playlist->primeira;
+    do {
+        if (strcmp(temp->titulo, titulo) == 0) return temp;
+        temp = temp->proxima;
+    } while (temp != playlist->primeira);
+    return NULL;
+}
+
+void exibirPlaylist(Playlist* playlist) {
+    if (!playlist->primeira) {
+        printf("Playlist vazia.\n");
+        return;
+    }
+
+    Musica* temp = playlist->primeira;
+    printf("Playlist:\n");
+    do {
+        printf("Artista: %s | Música: %s\n", temp->artista, temp->titulo);
+        temp = temp->proxima;
+    } while (temp != playlist->primeira);
+}
+
+void avancarMusica(Playlist* playlist) {
+    if (playlist->atual) playlist->atual = playlist->atual->proxima;
+}
+
+void exibirMusicaAtual(Playlist* playlist) {
+    if (playlist->atual) {
+        printf("Tocando agora: %s - %s\n", playlist->atual->artista, playlist->atual->titulo);
+    } else {
+        printf("Nenhuma música está sendo tocada no momento.\n");
+    }
+}
+
+void carregarDoArquivo(const char* nomeArquivo, Playlist* playlist) {
+    FILE* arquivo = fopen(nomeArquivo, "r");
+    if (!arquivo) {
+        fprintf(stderr, "Não foi possível abrir o arquivo: %s\n", nomeArquivo);
+        return;
+    }
+    char linha[ARTISTA_MAX + TITULO_MAX + 2]; // Espaço para artista, título, separador e nulo
+    while (fgets(linha, sizeof(linha), arquivo)) {
+        char* artista = strtok(linha, ";");
+        char* titulo = strtok(NULL, "\n");
+        if (artista && titulo) {
+            adicionarMusica(playlist, artista, titulo);
+        }
+    }
+    fclose(arquivo);
+}
+
+void salvarNoArquivo(const char* nomeArquivo, Playlist* playlist) {
+    FILE* arquivo = fopen(nomeArquivo, "w");
+    if (!arquivo) {
+        fprintf(stderr, "Não foi possível salvar o arquivo: %s\n", nomeArquivo);
+        return;
+    }
+    Musica* temp = playlist->primeira;
+    if (temp) {
+        do {
+            fprintf(arquivo, "%s;%s\n", temp->artista, temp->titulo);
+            temp = temp->proxima;
+        } while (temp != playlist->primeira);
+    }
+    fclose(arquivo);
+}
+
+void exibirMenu() {
+    printf("Menu de Opções:\n");
+    printf("1. Exibir a playlist\n");
+    printf("2. Inserir novas músicas\n");
+    printf("3. Remover uma música\n");
+    printf("4. Buscar por uma música\n");
+    printf("5. Avançar para a próxima música\n");
+    printf("6. Exibir música atual\n");
+    printf("7. Sair\n");
+}
+
+int obterEscolha() {
+    int escolha;
+    printf("Selecione uma opção: ");
+    while (scanf("%d", &escolha) != 1) {
+        while (getchar() != '\n');
+        printf("Entrada inválida. Tente novamente.\nSelecione uma opção: ");
+    }
+    return escolha;
+}
+
+int main() {
+    Playlist playlist;
+    inicializarPlaylist(&playlist);
+    const char* nomeArquivo = "musicas.txt";
+
+    carregarDoArquivo(nomeArquivo, &playlist);
+
+    int rodando = 1;
+    while (rodando) {
+        exibirMenu();
+        int escolha = obterEscolha();
+        getchar(); // Limpar o buffer do teclado
+
+        switch (escolha) {
+            case 1:
+                exibirPlaylist(&playlist);
+                break;
+            case 2: {
+                char artista[ARTISTA_MAX], titulo[TITULO_MAX];
+                printf("Digite o nome do artista: ");
+                fgets(artista, sizeof(artista), stdin);
+                artista[strcspn(artista, "\n")] = '\0';
+                printf("Digite o nome da música: ");
+                fgets(titulo, sizeof(titulo), stdin);
+                titulo[strcspn(titulo, "\n")] = '\0';
+                adicionarMusica(&playlist, artista, titulo);
+                salvarNoArquivo(nomeArquivo, &playlist);
+                printf("Música adicionada com sucesso!\n");
+                break;
+            }
+            case 3: {
+                char titulo[TITULO_MAX];
+                printf("Digite o nome da música para remover: ");
+                fgets(titulo, sizeof(titulo), stdin);
+                titulo[strcspn(titulo, "\n")] = '\0';
+                removerMusica(&playlist, titulo);
+                salvarNoArquivo(nomeArquivo, &playlist);
+                printf("Música removida com sucesso!\n");
+                break;
+            }
+            case 4: {
+                char titulo[TITULO_MAX];
+                printf("Digite o nome da música para buscar: ");
+                fgets(titulo, sizeof(titulo), stdin);
+                titulo[strcspn(titulo, "\n")] = '\0';
+                Musica* musica = buscarMusica(&playlist, titulo);
+                if (musica) {
+                    printf("Encontrada: %s - %s\n", musica->artista, musica->titulo);
+                } else {
+                    printf("Música não encontrada\n");
+                }
+                break;
+            }
+            case 5:
+                avancarMusica(&playlist);
+                exibirMusicaAtual(&playlist);
+                break;
+            case 6:
+                exibirMusicaAtual(&playlist);
+                break;
+            case 7:
+                rodando = 0;
+                break;
+            default:
+                printf("Opção inválida. Tente novamente.\n");
+                break;
+        }
+    }
+
+    salvarNoArquivo(nomeArquivo, &playlist);
+    printf("Saindo...\n");
+
+    return 0;
+}
